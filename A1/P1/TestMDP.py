@@ -13,12 +13,14 @@ discount = 0.9
 mdp = MDP(T,R,discount)
 
 '''Test each procedure'''
+
+np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
+
 [V,nIterations,epsilon] = mdp.valueIteration(initialV=np.zeros(mdp.nStates))
 policy = mdp.extractPolicy(V) # Extract policy from value function
-print(f"V for value iteration: {V}\nnIterations: {nIterations}\nepsilon: {epsilon:.5f}\npolicy: {policy}\n")
+print(f"\nV for value iteration: {V}\nnIterations: {nIterations}\nepsilon: {epsilon:.5f}\npolicy: {policy}\n")
 
 V = mdp.evaluatePolicy(np.array([1,0,1,0])) # Evaluate policy
-np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
 print(f"V for policy evaluation: {V}\n")
 
 [policy,V,iterId] = mdp.policyIteration(np.array([0,0,0,0]))
@@ -28,4 +30,4 @@ print(f"V for policy iteration: {V}\nnIterations: {iterId}\npolicy: {policy}\n")
 print(f"V for partial policy evaluation: {V}\nnIterations: {iterId}\ntolerance: {epsilon:.3f}\n")
 
 [policy,V,iterId,tolerance] = mdp.modifiedPolicyIteration(np.array([1,0,1,0]),np.array([0,10,0,13]))
-print(f"V for modified policy iteration: {V}\nnIterations: {iterId}\ntolerance: {tolerance:.3f}\npolicy: {policy}")
+print(f"V for modified policy iteration: {V}\nnIterations: {iterId}\ntolerance: {tolerance:.3f}\npolicy: {policy}\n")

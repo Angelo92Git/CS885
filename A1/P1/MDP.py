@@ -44,7 +44,6 @@ class MDP:
         epsilon = np.inf
         iterId = 0
         while epsilon > tolerance and iterId < nIterations:
-            #V1 = np.amax([self.R[0] + self.discount*(self.T[0]@V),self.R[1] + self.discount*(self.T[1]@V)],axis=0)
             V1 = np.amax(self.R + self.discount*(self.T@V), axis=0)
             epsilon = np.max(np.abs(V1-V))
             iterId += 1
@@ -100,13 +99,11 @@ class MDP:
         iterId = 0
         while any(policy != policy_old):
             # Policy Evaluation
-            lhs = np.eye(self.nStates) - self.discount*self.T[policy,range(self.nStates)]
-            rhs = self.R[policy,range(self.nStates)]
-            V = np.linalg.solve(lhs,rhs)
+            V = self.evaluatePolicy(policy)
 
             # Policy Improvement
             policy_old = policy
-            policy = np.argmax(self.R + self.discount*(self.T@V), axis=0)
+            policy = self.extractPolicy(V)
             iterId += 1
         return [policy,V,iterId]
             
@@ -129,7 +126,6 @@ class MDP:
         epsilon = np.inf
         iterId = 0
         while epsilon > tolerance and iterId < nIterations:
-            #V1 = np.amax([self.R[0] + self.discount*(self.T[0]@V),self.R[1] + self.discount*(self.T[1]@V)],axis=0)
             V1 = self.R[policy,range(self.nStates)]+ self.discount*(self.T[policy, range(self.nStates)]@V)
             epsilon = np.max(np.abs(V1-V))
             iterId += 1
@@ -157,27 +153,14 @@ class MDP:
         policy = initialPolicy
         V = initialV
         iterId = 0
-        eval_iterId = 0
         epsilon = np.inf
         while epsilon > tolerance and iterId < nIterations:
-            while eval_iterId < nEvalIterations:
-                V1 = self.R[policy,range(self.nStates)]+ self.discount*(self.T[policy, range(self.nStates)]@V)
-                eval_iterId += 1
-                V=V1
+            [V, eval_iterId, epsilon] = self.evaluatePolicyPartially(policy,V,nEvalIterations,0)
 
-            policy = np.argmax(self.R + self.discount*(self.T@V), axis=0)
+            policy = self.extractPolicy(V)
             V1 = np.amax(self.R + self.discount*(self.T@V), axis=0)
             epsilon = np.max(np.abs(V1-V))
-            eval_iterId = 0
             iterId += 1
-
-
-        # temporary values to ensure that the code compiles until this
-        # function is coded
-        #policy = np.zeros(self.nStates)
-        #V = np.zeros(self.nStates)
-        #iterId = 0
-        #epsilon = 0
 
         return [policy,V,iterId,epsilon]
         

@@ -216,8 +216,8 @@ T[2,13,13] = b;
 
 T[2,14,16] = 1;
 
-T[2,15,11] = a;
-T[2,15,14] = b;
+T[2,15,11] = b;
+T[2,15,14] = a;
 T[2,15,15] = b;
 
 T[2,16,16] = 1;
@@ -301,14 +301,24 @@ discount = 0.95
 mdp = MDP.MDP(T,R,discount)
 
 '''Test each procedure'''
-[V,nIterations,epsilon] = mdp.valueIteration(initialV=np.zeros(mdp.nStates),tolerance=0.01)
 np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
-print(f"V for value iteration:\n {V}\nnIterations: {nIterations}\ntolerance: {epsilon:.3f}")
+
+[V,nIterations,epsilon] = mdp.valueIteration(initialV=np.zeros(mdp.nStates),tolerance=0.01)
 policy = mdp.extractPolicy(V)
-print(f"policy for value iteration: {policy}\n")
+policy_ref = policy
+print(f"\nValue Iteration:\npolicy: {policy}\nValue function: {V}\nNumber of Iterations: {nIterations}\n")
+#print(f"V for value iteration: {V}\nnIterations: {nIterations}\nepsilon: {epsilon:.4f}\npolicy: {policy}")
+
 
 [policy,V,nIterations] = mdp.policyIteration(np.zeros(mdp.nStates,dtype=int))
-print(f"V for policy iteration:\n {V}\nnIterations: {nIterations}\npolicy for policy iteration: {policy}\n")
+print(f"\nPolicy Iteration:\npolicy: {policy}\nValue function: {V}\nNumber of Iterations: {nIterations}")
+print(f"Policy matches result in value iteration: {all(policy==policy_ref)}\n")
+#print(f"V for policy iteration: {V}\nnIterations: {nIterations}\npolicy: {policy}")
 
-[policy,V,nIterations,epsilon] = mdp.modifiedPolicyIteration(np.zeros(mdp.nStates,dtype=int),np.zeros(mdp.nStates),tolerance=0.01)
-print(f"V for modified policy iteration:\n {V}\nnIterations: {nIterations}\ntolerance: {epsilon}\npolicy for modified policy iteration: {policy}\n")
+#[policy,V,nIterations,epsilon] = mdp.modifiedPolicyIteration(np.zeros(mdp.nStates,dtype=int),np.zeros(mdp.nStates),tolerance=0.01)
+print(f"\nModified Policy Iteration:")
+for nEvalIter in np.arange(1,11,1):
+  [policy,V,nIterations,epsilon] = mdp.modifiedPolicyIteration(np.zeros(mdp.nStates,dtype=int),np.zeros(mdp.nStates),nEvalIterations = nEvalIter, tolerance=0.01)
+  print(f"\npolicy: {policy}\nNumber of Iterations: {nIterations}")
+  print(f"Policy matches result in value iteration: {all(policy==policy_ref)}")
+  #print(f"V for modified policy iteration: {V}\nnIterations: {nIterations}\nepsilon: {epsilon:.4f}\npolicy: {policy}")
