@@ -40,14 +40,14 @@ class MDP:
         iterId -- # of iterations performed: scalar
         epsilon -- ||V^n-V^n+1||_inf: scalar'''
 
-        V = initialV
+        V = np.copy(initialV)
         epsilon = np.inf
         iterId = 0
         while epsilon > tolerance and iterId < nIterations:
             V1 = np.amax(self.R + self.discount*(self.T@V), axis=0)
             epsilon = np.max(np.abs(V1-V))
             iterId += 1
-            V=V1
+            V=np.copy(V1)
         return [V,iterId,epsilon]
 
     def extractPolicy(self,V):
@@ -95,14 +95,14 @@ class MDP:
         iterId -- # of iterations peformed by policy iteration: scalar'''
 
         policy_old = np.inf*np.ones(np.shape(initialPolicy))
-        policy = initialPolicy
+        policy = np.copy(initialPolicy)
         iterId = 0
         while any(policy != policy_old):
             # Policy Evaluation
             V = self.evaluatePolicy(policy)
 
             # Policy Improvement
-            policy_old = policy
+            policy_old = np.copy(policy)
             policy = self.extractPolicy(V)
             iterId += 1
         return [policy,V,iterId]
@@ -122,14 +122,14 @@ class MDP:
         iterId -- # of iterations performed: scalar
         epsilon -- ||V^n-V^n+1||_inf: scalar'''
 
-        V = initialV
+        V = np.copy(initialV)
         epsilon = np.inf
         iterId = 0
         while epsilon > tolerance and iterId < nIterations:
             V1 = self.R[policy,range(self.nStates)]+ self.discount*(self.T[policy, range(self.nStates)]@V)
             epsilon = np.max(np.abs(V1-V))
             iterId += 1
-            V=V1
+            V=np.copy(V1)
         return [V,iterId,epsilon]
 
     def modifiedPolicyIteration(self,initialPolicy,initialV,nEvalIterations=5,nIterations=np.inf,tolerance=0.01):
@@ -150,8 +150,8 @@ class MDP:
         iterId -- # of iterations peformed by modified policy iteration: scalar
         epsilon -- ||V^n-V^n+1||_inf: scalar'''
 
-        policy = initialPolicy
-        V = initialV
+        policy = np.copy(initialPolicy)
+        V = np.copy(initialV)
         iterId = 0
         epsilon = np.inf
         while epsilon > tolerance and iterId < nIterations:
