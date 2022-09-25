@@ -54,7 +54,7 @@ class RL:
         policy -- final policy
         '''
         # Constants
-        nTrials = 10
+        nTrials = 100
 
         # initialize variables before trials: (avg_cum_r = zeros)
         # var List () <- (avg_cum_r)
