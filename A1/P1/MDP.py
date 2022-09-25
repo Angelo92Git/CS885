@@ -155,11 +155,12 @@ class MDP:
         iterId = 0
         epsilon = np.inf
         while epsilon > tolerance and iterId < nIterations:
-            [V, eval_iterId, epsilon] = self.evaluatePolicyPartially(policy,V,nEvalIterations,0)
+            V, _, _ = self.evaluatePolicyPartially(policy,V,nEvalIterations,0)
 
             policy = self.extractPolicy(V)
             V1 = np.amax(self.R + self.discount*(self.T@V), axis=0)
             epsilon = np.max(np.abs(V1-V))
+            V = V1
             iterId += 1
 
         return [policy,V,iterId,epsilon]
