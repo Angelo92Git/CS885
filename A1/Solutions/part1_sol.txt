@@ -1,0 +1,58 @@
+# Part 1a: Report the policy, value function and number of iterations needed by value iteration when using a tolerance of 0.01 and starting from a value function set to 0 for all states.
+
+Value Iteration:
+policy: [3 3 1 1 3 0 1 1 1 3 3 1 3 3 0 2 0]
+Value function: [ 49.669  55.272  61.574  65.875  48.010  52.302  68.139  73.255  50.226
+ -0.425  77.066  81.363  66.362  76.314  100.000  89.906  0.000]
+Number of Iterations: 26
+
+# Part 1b: Report the policy, value function and number of iterations needed by policy iteration to find an optimal policy when starting from the policy that chooses action 0 in all states.
+
+Policy Iteration:
+policy: [3 3 1 1 3 0 1 1 1 3 3 1 3 3 0 2 0]
+Value function: [ 49.691  55.286  61.582  65.879  48.032  52.320  68.145  73.257  50.230
+ -0.419  77.068  81.364  66.364  76.315  100.000  89.906  0.000]
+Number of Iterations: 7
+
+# Part 1c: Report the number of iterations needed by modified policy iteration to converge when varying the number of iterations in partial policy evaluation from 1 to 10. Use a tolerance of 0.01, start with the policy that chooses action 0 in all states and start with the value function that assigns 0 to all states.
+
+Modified Policy Iteration:
+partial policy evaluation iterations:1
+policy: [3 3 1 1 3 0 1 1 1 3 3 1 3 3 0 2 0]
+Number of Iterations: 14
+
+partial policy evaluation iterations:2
+policy: [3 3 1 1 3 0 1 1 1 3 3 1 3 3 0 2 0]
+Number of Iterations: 10
+
+partial policy evaluation iterations:3
+policy: [3 3 1 1 3 0 1 1 1 3 3 1 3 3 0 2 0]
+Number of Iterations: 8
+
+partial policy evaluation iterations:4
+policy: [3 3 1 1 3 0 1 1 1 3 3 1 3 3 0 2 0]
+Number of Iterations: 8
+
+partial policy evaluation iterations:5
+policy: [3 3 1 1 3 0 1 1 1 3 3 1 3 3 0 2 0]
+Number of Iterations: 7
+
+partial policy evaluation iterations:6
+policy: [3 3 1 1 3 0 1 1 1 3 3 1 3 3 0 2 0]
+Number of Iterations: 7
+
+partial policy evaluation iterations:7
+policy: [3 3 1 1 3 0 1 1 1 3 3 1 3 3 0 2 0]
+Number of Iterations: 7
+
+partial policy evaluation iterations:8
+policy: [3 3 1 1 3 0 1 1 1 3 3 1 3 3 0 2 0]
+Number of Iterations: 7
+
+partial policy evaluation iterations:9
+policy: [3 3 1 1 3 0 1 1 1 3 3 1 3 3 0 2 0]
+Number of Iterations: 7
+
+partial policy evaluation iterations:10
+policy: [3 3 1 1 3 0 1 1 1 3 3 1 3 3 0 2 0]
+Number of Iterations: 7
