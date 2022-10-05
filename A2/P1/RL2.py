@@ -48,14 +48,6 @@ class RL2:
         a_count = np.zeros(self.mdp.nActions)
         iter = 0
 
-        # Go through one iteration for each action - this is not used.
-        # for a in range(self.mdp.nActions):
-        #     iter += 1
-        #     a_count[a] += 1
-        #     r, _ = self.sampleRewardAndNextState(0,a)
-        #     empiricalMeans[a] = r/a_count[a] 
- 
-
         # After collecting one sample reward for each action begin epsilon-greedy strategy
         for iter in range(nIterations):
             epsilon = 1/(iter + 1)
