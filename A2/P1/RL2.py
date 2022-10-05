@@ -74,9 +74,19 @@ class RL2:
         empiricalMeans -- empirical average of rewards for each arm (array of |A| entries)
         '''
 
-        # temporary values to ensure that the code compiles until this
-        # function is coded
         empiricalMeans = np.zeros(self.mdp.nActions)
+        
+        for iter in range(nIterations):   
+            for a_sampling in range(self.mdp.nActions): 
+                samples = np.random.beta(*prior[a_sampling],k) 
+                empiricalMeans[a_sampling] = np.mean(samples)
+
+            a = empiricalMeans.argmax()
+            r, _ = self.sampleRewardAndNextState(0,a)
+            if r == 1:
+                prior[a,0] += 1
+            elif r == 0:
+                prior[a,1] += 1
 
         return empiricalMeans
 
