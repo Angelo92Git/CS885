@@ -48,7 +48,7 @@ class RL2:
         a_count = np.zeros(self.mdp.nActions)
         iter = 0
 
-        # After collecting one sample reward for each action begin epsilon-greedy strategy
+        # Begin epsilon-greedy strategy
         for iter in range(nIterations):
             epsilon = 1/(iter + 1)
             if np.random.rand(1)[0] < epsilon:
