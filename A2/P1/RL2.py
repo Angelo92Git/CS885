@@ -44,9 +44,29 @@ class RL2:
         empiricalMeans -- empirical average of rewards for each arm (array of |A| entries)
         '''
 
-        # temporary values to ensure that the code compiles until this
-        # function is coded
         empiricalMeans = np.zeros(self.mdp.nActions)
+        a_count = np.zeros(self.mdp.nActions)
+        iter = 0
+
+        # Go through one iteration for each action - this is not used.
+        # for a in range(self.mdp.nActions):
+        #     iter += 1
+        #     a_count[a] += 1
+        #     r, _ = self.sampleRewardAndNextState(0,a)
+        #     empiricalMeans[a] = r/a_count[a] 
+ 
+
+        # After collecting one sample reward for each action begin epsilon-greedy strategy
+        for iter in range(nIterations):
+            epsilon = 1/(iter + 1)
+            if np.random.rand(1)[0] < epsilon:
+                a = np.random.choice(range(self.mdp.nActions))
+            else:
+                a = empiricalMeans.argmax()
+
+            a_count[a] += 1 
+            r, _ = self.sampleRewardAndNextState(0,a)
+            empiricalMeans[a] = (empiricalMeans[a]*(a_count[a]-1) + r)/a_count[a]
 
         return empiricalMeans
 
