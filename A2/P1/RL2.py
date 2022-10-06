@@ -114,5 +114,4 @@ class RL2:
             empiricalMeans[a] = (a_count[a]*empiricalMeans[a]+r)/(a_count[a]+1)
             a_count[a] += 1 
 
-
         return empiricalMeans
