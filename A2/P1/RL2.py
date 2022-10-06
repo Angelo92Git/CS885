@@ -100,8 +100,19 @@ class RL2:
         empiricalMeans -- empirical average of rewards for each arm (array of |A| entries)
         '''
 
-        # temporary values to ensure that the code compiles until this
-        # function is coded
         empiricalMeans = np.zeros(self.mdp.nActions)
+        a_count = np.zeros(self.mdp.nActions)
+
+        for a in range(self.mdp.nActions):
+            empiricalMeans[a], _ = self.sampleRewardAndNextState(0,a)
+            a_count[a] += 1 
+
+        for iter in range(nIterations-self.mdp.nActions):
+            ucb = empiricalMeans + np.sqrt((2*np.log(iter+self.mdp.nActions))/a_count)
+            a = ucb.argmax()
+            r, _ = self.sampleRewardAndNextState(0,a)
+            empiricalMeans[a] = (a_count[a]*empiricalMeans[a]+r)/(a_count[a]+1)
+            a_count[a] += 1 
+
 
         return empiricalMeans
