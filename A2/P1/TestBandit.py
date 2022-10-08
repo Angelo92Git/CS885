@@ -1,6 +1,7 @@
 import numpy as np
 import MDP
 import RL2
+import matplotlib.pyplot as plt
 
 
 def sampleBernoulli(mean):
@@ -25,16 +26,43 @@ mdp = MDP.MDP(T,R,discount)
 banditProblem = RL2.RL2(mdp,sampleBernoulli)
 
 # Test epsilon greedy strategy
-empiricalMeans = banditProblem.epsilonGreedyBandit(nIterations=200)
+empiricalMeans, _ = banditProblem.epsilonGreedyBandit(nIterations=200)
 print("\nepsilonGreedyBandit results")
 print(empiricalMeans)
 
 # Test Thompson sampling strategy
-empiricalMeans = banditProblem.thompsonSamplingBandit(prior=np.ones([mdp.nActions,2]),nIterations=200)
+empiricalMeans, _ = banditProblem.thompsonSamplingBandit(prior=np.ones([mdp.nActions,2]),nIterations=200)
 print("\nthompsonSamplingBandit results")
 print(empiricalMeans)
 
 # Test UCB strategy
-empiricalMeans = banditProblem.UCBbandit(nIterations=200)
+empiricalMeans, _ = banditProblem.UCBbandit(nIterations=200)
 print("\nUCBbandit results")
 print(empiricalMeans)
+
+epGreedy_curves = []
+Thompson_curves = []
+UCB_curves = []
+for trial in range(1000):
+    eM_epGreedy, r_seq_epGreedy =  banditProblem.epsilonGreedyBandit(nIterations=200)
+    eM_Thompson, r_seq_Thompson =  banditProblem.thompsonSamplingBandit(prior=np.ones([mdp.nActions,2]),nIterations=200)
+    eM_UCB, r_seq_UCB =  banditProblem.UCBbandit(nIterations=200)
+    epGreedy_curves += [r_seq_epGreedy]
+    Thompson_curves += [r_seq_Thompson]
+    UCB_curves += [r_seq_UCB]
+
+def plot_arrays(vars, color, label):
+    mean = np.mean(vars, axis = 0)
+    std = np.std(vars, axis = 0)
+    plt.plot(range(len(mean)), mean, color=color, label=label)
+    # plt.fill_between(range(len(mean)), np.maximum(mean-std, 0), np.minimum(mean+std, 200), color=color, alpha=0.3)
+
+plot_arrays(epGreedy_curves, color = 'b', label = 'epsilon Greedy')
+plot_arrays(Thompson_curves, color = 'r', label = 'Thompson Sampling')
+plot_arrays(UCB_curves, color = 'g', label = 'UCB')
+
+plt.legend(loc='best')
+plt.xlabel('Number of Episodes')
+plt.ylabel('Reward Earned at each Iteration')
+plt.ylim([0.2, 0.8])
+plt.show()

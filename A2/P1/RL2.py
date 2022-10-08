@@ -44,6 +44,7 @@ class RL2:
         empiricalMeans -- empirical average of rewards for each arm (array of |A| entries)
         '''
 
+        r_sequence = []
         empiricalMeans = np.zeros(self.mdp.nActions)
         a_count = np.zeros(self.mdp.nActions)
         iter = 0
@@ -58,9 +59,10 @@ class RL2:
 
             a_count[a] += 1 
             r, _ = self.sampleRewardAndNextState(0,a)
+            r_sequence += [r]
             empiricalMeans[a] = (empiricalMeans[a]*(a_count[a]-1) + r)/a_count[a]
 
-        return empiricalMeans
+        return empiricalMeans, r_sequence
 
     def thompsonSamplingBandit(self,prior,nIterations,k=1):
         '''Thompson sampling algorithm for Bernoulli bandits (assume no discount factor)
@@ -75,6 +77,7 @@ class RL2:
         '''
 
         empiricalMeans = np.zeros(self.mdp.nActions)
+        r_sequence = []
         
         for iter in range(nIterations):   
             for a_sampling in range(self.mdp.nActions): 
@@ -83,12 +86,13 @@ class RL2:
 
             a = empiricalMeans.argmax()
             r, _ = self.sampleRewardAndNextState(0,a)
+            r_sequence += [r]
             if r == 1:
                 prior[a,0] += 1
             elif r == 0:
                 prior[a,1] += 1
 
-        return empiricalMeans
+        return empiricalMeans, r_sequence
 
     def UCBbandit(self,nIterations):
         '''Upper confidence bound algorithm for bandits (assume no discount factor)
@@ -102,16 +106,19 @@ class RL2:
 
         empiricalMeans = np.zeros(self.mdp.nActions)
         a_count = np.zeros(self.mdp.nActions)
+        r_sequence = []
 
         for a in range(self.mdp.nActions):
             empiricalMeans[a], _ = self.sampleRewardAndNextState(0,a)
+            r_sequence += [empiricalMeans[a]]
             a_count[a] += 1 
 
         for iter in range(nIterations-self.mdp.nActions):
             ucb = empiricalMeans + np.sqrt((2*np.log(iter+self.mdp.nActions))/a_count)
             a = ucb.argmax()
             r, _ = self.sampleRewardAndNextState(0,a)
+            r_sequence += [r]
             empiricalMeans[a] = (a_count[a]*empiricalMeans[a]+r)/(a_count[a]+1)
             a_count[a] += 1 
 
-        return empiricalMeans
+        return empiricalMeans, r_sequence
