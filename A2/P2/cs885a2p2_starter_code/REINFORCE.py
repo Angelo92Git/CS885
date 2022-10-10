@@ -146,7 +146,7 @@ plt.plot(range(N), last25Rs, 'b')
 plt.xlabel('Episode')
 plt.ylabel('Reward (averaged over last 25 episodes)')
 plt.title("REINFORCE, mode: " + args.mode)
-plt.savefig("images/reinforce-"+args.mode+".png")
+plt.savefig("/home/angelo/Angelo_WIP/Courses/CS885/A2/P2/cs885a2p2_starter_code/images/reinforce-"+args.mode+".png")
 print("Episodic reward plot saved!")
 
 # Play test episodes

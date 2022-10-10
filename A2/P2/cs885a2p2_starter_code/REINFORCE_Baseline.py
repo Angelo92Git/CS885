@@ -93,9 +93,26 @@ def train(S,A,returns):
 
     # policy gradient with baseline
     # apply accumulated gradient across the episode
+    delta = np.zeros(len(S))
+    for step in range(len(S)):
+        OPT1.zero_grad()
+        with torch.no_grad():
+            delta[step] = returns[step] - V(S[step]).detach()
+        objective1 = -(delta[step])*V(S[step])
+        objective1.backward()
+        OPT1.step()
+
     for i in range(POLICY_TRAIN_ITERS):
         # implement objective and update for policy
         # should be similar to REINFORCE + small change
+        OPT2.zero_grad()
+
+        # collect pi(a | s) for trajectories
+        log_probs = torch.nn.LogSoftmax(dim=-1)(pi(S)).gather(1, A.view(-1, 1)).view(-1)
+        n = torch.arange(S.size(0)).to(DEVICE)
+        objective2 = -((GAMMA**n) * delta * log_probs).sum()
+        objective2.backward()
+        OPT2.step()
         
     #################################
 
@@ -150,7 +167,7 @@ plt.plot(range(N), last25Rs, 'b')
 plt.xlabel('Episode')
 plt.ylabel('Reward (averaged over last 25 episodes)')
 plt.title("REINFORCE with Baseline, mode: " + args.mode)
-plt.savefig("images/reinforce_baseline-"+args.mode+".png")
+plt.savefig("/home/angelo/Angelo_WIP/Courses/CS885/A2/P2/cs885a2p2_starter_code/images/reinforce_baseline-"+args.mode+".png")
 print("Episodic reward plot saved!")
 
 # Play test episodes

@@ -96,12 +96,31 @@ def train(S,A,returns, old_log_probs):
     # Use the same implementation you did in REINFORCE_Baseline.py for estimating the advantage function
     # (instead of following the PPO slides)
 
+    delta = np.zeros(len(S))
+    for step in range(len(S)):
+        OPT1.zero_grad()
+        with torch.no_grad():
+            delta[step] = returns[step] - V(S[step]).detach()
+        objective1 = -(delta[step])*V(S[step])
+        objective1.backward()
+        OPT1.step()
 
     # PPO 
     # gradient ascent for POLICY_TRAIN_ITERS steps
     for i in range(POLICY_TRAIN_ITERS):
         # implement objective and update for policy
         # follow the slides for this
+
+        OPT2.zero_grad()
+        Adv = torch.tensor(delta).detach()
+        new_log_probs = torch.nn.LogSoftmax(dim=-1)(pi(S)).gather(1, A.view(-1,1)).view(-1)
+        prob_ratio = torch.exp(new_log_probs - old_log_probs)
+        objective = -torch.mean(torch.min(prob_ratio*Adv, torch.clip(prob_ratio, min=1-CLIP_PARAM, max=1+CLIP_PARAM)*Adv))
+        objective.backward()
+        OPT2.step()
+
+
+
         
     #################################
 
