@@ -112,6 +112,7 @@ def train(config, seed, algo='cqldqn'):
             dones = dones.to(device)
             batch = (states, actions, rewards, next_states, dones)
             total_loss, cql_loss, bellman_error = agent.learn(batch)
+            # exit(-1)  # exit process for debugging
             
         if i % config.eval_every == 0:
             returns = evaluate(env, agent, seed=seed)
@@ -154,7 +155,7 @@ def main():
         data = np.concatenate(results, axis=0)
         plot_data.append(data)
 
-    colors = ['gold', 'deepskyblue']
+    colors = ['red', 'deepskyblue']
     labels = ['CQLDQN', 'DQN']
     plot_curves(plot_data, colors, labels)
 

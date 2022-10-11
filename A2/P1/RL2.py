@@ -121,4 +121,6 @@ class RL2:
             empiricalMeans[a] = (a_count[a]*empiricalMeans[a]+r)/(a_count[a]+1)
             a_count[a] += 1 
 
+            # Spike at the start is because the same arm is being pulled on step 0, 1, and 2 - corresponding to the true average reward of each arm.
+
         return empiricalMeans, r_sequence
