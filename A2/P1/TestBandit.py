@@ -62,7 +62,7 @@ plot_arrays(Thompson_curves, color = 'r', label = 'Thompson Sampling')
 plot_arrays(UCB_curves, color = 'g', label = 'UCB')
 
 plt.legend(loc='best')
-plt.xlabel('Number of Episodes')
+plt.xlabel('Iteration')
 plt.ylabel('Reward Earned at each Iteration')
 plt.ylim([0.2, 0.8])
 plt.show()
