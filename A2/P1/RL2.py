@@ -1,5 +1,6 @@
 import numpy as np
 import MDP
+import copy
 
 class RL2:
     def __init__(self,mdp,sampleReward):
@@ -77,20 +78,25 @@ class RL2:
         '''
 
         empiricalMeans = np.zeros(self.mdp.nActions)
+        betaMeans = np.zeros(self.mdp.nActions)
+        prior_copy = copy.deepcopy(prior)
+        a_count = np.zeros(self.mdp.nActions)
         r_sequence = []
         
         for iter in range(nIterations):   
             for a_sampling in range(self.mdp.nActions): 
-                samples = np.random.beta(*prior[a_sampling],k) 
-                empiricalMeans[a_sampling] = np.mean(samples)
+                samples = np.random.beta(*prior_copy[a_sampling],k) 
+                betaMeans[a_sampling] = np.mean(samples)
 
-            a = empiricalMeans.argmax()
+            a = betaMeans.argmax()
             r, _ = self.sampleRewardAndNextState(0,a)
+            a_count[a] += 1
+            empiricalMeans[a] = (empiricalMeans[a]*(a_count[a]-1) + r)/a_count[a]
             r_sequence += [r]
             if r == 1:
-                prior[a,0] += 1
+                prior_copy[a,0] += 1
             elif r == 0:
-                prior[a,1] += 1
+                prior_copy[a,1] += 1
 
         return empiricalMeans, r_sequence
 
@@ -118,8 +124,8 @@ class RL2:
             a = ucb.argmax()
             r, _ = self.sampleRewardAndNextState(0,a)
             r_sequence += [r]
-            empiricalMeans[a] = (a_count[a]*empiricalMeans[a]+r)/(a_count[a]+1)
             a_count[a] += 1 
+            empiricalMeans[a] = (empiricalMeans[a]*(a_count[a]-1) + r)/a_count[a]
 
             # Spike at the start is because the same arm is being pulled on step 0, 1, and 2 - corresponding to the true average reward of each arm.
 
