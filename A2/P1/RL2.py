@@ -114,13 +114,8 @@ class RL2:
         a_count = np.zeros(self.mdp.nActions)
         r_sequence = []
 
-        for a in range(self.mdp.nActions):
-            empiricalMeans[a], _ = self.sampleRewardAndNextState(0,a)
-            r_sequence += [empiricalMeans[a]]
-            a_count[a] += 1 
-
-        for iter in range(nIterations-self.mdp.nActions):
-            ucb = empiricalMeans + np.sqrt((2*np.log(iter+self.mdp.nActions))/a_count)
+        for iter in range(1, nIterations + 1):
+            ucb = empiricalMeans + np.sqrt((2*np.log(iter))/(a_count+1e-8))
             a = ucb.argmax()
             r, _ = self.sampleRewardAndNextState(0,a)
             r_sequence += [r]
