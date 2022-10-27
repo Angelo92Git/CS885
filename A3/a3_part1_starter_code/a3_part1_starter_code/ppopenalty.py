@@ -65,7 +65,7 @@ def policy(env, obs):
     return np.random.choice(ACT_N, p = probs.cpu().detach().numpy())
 
 # Training function
-def update_networks(epi, epoch_data, buf, Pi, V, OPTPi, OPTV):
+def update_networks(epi_lens, epoch_data, buf, Pi, V, OPTPi, OPTV):
     
     # Sample from buffer
     S, A, returns, old_log_probs = buf.sample(MINIBATCH_SIZE)
@@ -89,12 +89,15 @@ def update_networks(epi, epoch_data, buf, Pi, V, OPTPi, OPTV):
 
     if penalty_param != 0:
         epoch_data = copy.deepcopy(epoch_data)
-        OPTPi.zero_grad()
-        log_probs_c = torch.nn.LogSoftmax(dim=-1)(Pi(epoch_data['S'])).gather(1, epoch_data['A'].view(-1, 1)).view(-1)
-        penalty = epoch_data['Gc0'] * epoch_data['ret_c'] * log_probs_c
-        objective3 = penalty.sum()
-        objective3.backward()
-        OPTPi.step()
+        s_i = 0 # Start index of episode
+        for e_i in epi_lens: # End index of episode
+            OPTPi.zero_grad()
+            log_probs_c = torch.nn.LogSoftmax(dim=-1)(Pi(epoch_data['S'][s_i:e_i])).gather(1, epoch_data['A'][s_i:e_i].view(-1, 1)).view(-1)
+            penalty = epoch_data['Gc0'][s_i:e_i] * epoch_data['ret_c'][s_i:e_i] * log_probs_c
+            objective3 = penalty.sum()
+            objective3.backward()
+            OPTPi.step()
+            s_i = e_i
 
 
 # Play episodes
@@ -121,12 +124,14 @@ def train(seed):
         all_returns = []
         all_returns_c = []
         Gc0_all = []
+        epi_lens = []
         for epj in range(EPISODES_PER_EPOCH):
             
             # Play an episode and log episodic reward
             S, A, R, Rc = utils.envs.play_episode(env, policy, constraint=True)
             all_S += S[:-1] # ignore last state
             all_A += A
+            epi_lens.append(len(all_A))
             
             # Create returns 
             discounted_rewards = copy.deepcopy(R)
@@ -144,7 +149,7 @@ def train(seed):
             if discounted_rewards_c[0] <= penalty_param:
                 Gc0_all += [torch.zeros_like(discounted_rewards_c).to(discounted_rewards_c.dtype)]
             else:
-                Gc0_all += [discounted_rewards_c[0]*torch.ones_like(discounted_rewards_c).to(discounted_rewards_c.dtype)] # Perhaps this should just be ones?
+                Gc0_all += [torch.ones_like(discounted_rewards_c).to(discounted_rewards_c.dtype)]
 
         S, A = t.f(np.array(all_S)), t.l(np.array(all_A))
         returns = torch.cat(all_returns, dim=0).flatten()
@@ -159,7 +164,7 @@ def train(seed):
 
         # update networks
         for i in range(TRAIN_EPOCHS):
-            update_networks(epi, epoch_data, buf, Pi, V, OPTPi, OPTV)
+            update_networks(epi_lens, epoch_data, buf, Pi, V, OPTPi, OPTV)
 
         # evaluate
         Rews = []
@@ -198,10 +203,10 @@ if __name__ == "__main__":
     fig.set_figwidth(10)
 
     # Train for different seeds
-    curves = []
-    curvesc = []
     plt_colours = {0:"red", 1:"blue", 5:"green", 10:"purple"}
     for beta in [0, 1, 5, 10]:
+        curves = []
+        curvesc = []
         penalty_param = beta
         for seed in SEEDS:
             R, Rc = train(seed)
