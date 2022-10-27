@@ -91,7 +91,7 @@ def update_networks(epi, epoch_data, buf, Pi, V, OPTPi, OPTV):
         epoch_data = copy.deepcopy(epoch_data)
         OPTPi.zero_grad()
         log_probs_c = torch.nn.LogSoftmax(dim=-1)(Pi(epoch_data['S'])).gather(1, epoch_data['A'].view(-1, 1)).view(-1)
-        penalty = epoch_data['ret_c'] * log_probs_c
+        penalty = epoch_data['Gc0'] * epoch_data['ret_c'] * log_probs_c
         objective3 = penalty.sum()
         objective3.backward()
         OPTPi.step()
@@ -120,6 +120,7 @@ def train(seed):
         all_S, all_A = [], []
         all_returns = []
         all_returns_c = []
+        Gc0_all = []
         for epj in range(EPISODES_PER_EPOCH):
             
             # Play an episode and log episodic reward
@@ -139,20 +140,22 @@ def train(seed):
             for i in range(len(Rc)-1)[::-1]:
                 discounted_rewards_c[i] += GAMMA * discounted_rewards_c[i+1]
             discounted_rewards_c = t.f(discounted_rewards_c)
+            all_returns_c += [discounted_rewards_c]
             if discounted_rewards_c[0] <= penalty_param:
-                all_returns_c += [torch.zeros_like(discounted_rewards_c)]
+                Gc0_all += [torch.zeros_like(discounted_rewards_c).to(discounted_rewards_c.dtype)]
             else:
-                all_returns_c += [discounted_rewards_c]
+                Gc0_all += [discounted_rewards_c[0]*torch.ones_like(discounted_rewards_c).to(discounted_rewards_c.dtype)] # Perhaps this should just be ones?
 
         S, A = t.f(np.array(all_S)), t.l(np.array(all_A))
         returns = torch.cat(all_returns, dim=0).flatten()
         returns_c = torch.cat(all_returns_c, dim=0).flatten()
+        Gc0 = torch.cat(Gc0_all, dim=0).flatten()
 
         # add to replay buffer
         log_probs = torch.nn.LogSoftmax(dim=-1)(Pi(S)).gather(1, A.view(-1, 1)).view(-1)
         buf.add(S, A, returns, log_probs.detach())
 
-        epoch_data = {'S':S, 'A':A, 'ret_c':returns_c}
+        epoch_data = {'S':S, 'A':A, 'ret_c':returns_c, 'Gc0':Gc0}
 
         # update networks
         for i in range(TRAIN_EPOCHS):
@@ -174,7 +177,7 @@ def train(seed):
         pbar.set_description("R25(%g), Rc25(%g)" % (last25testRs[-1], last25testRcs[-1]))
 
     pbar.close()
-    print("Training finished!")
+    print("Beta: ", beta, " Seed: ", seed, ", Training finished!")
     env.close()
     
     return last25testRs, last25testRcs
