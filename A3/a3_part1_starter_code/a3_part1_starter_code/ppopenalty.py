@@ -65,7 +65,7 @@ def policy(env, obs):
     return np.random.choice(ACT_N, p = probs.cpu().detach().numpy())
 
 # Training function
-def update_networks(epi, buf, Pi, V, OPTPi, OPTV):
+def update_networks(epi, epoch_data, buf, Pi, V, OPTPi, OPTV):
     
     # Sample from buffer
     S, A, returns, old_log_probs = buf.sample(MINIBATCH_SIZE)
@@ -86,6 +86,16 @@ def update_networks(epi, buf, Pi, V, OPTPi, OPTV):
     objective2 = -ppo_obj
     objective2.backward()
     OPTPi.step()
+
+    if penalty_param != 0:
+        epoch_data = copy.deepcopy(epoch_data)
+        OPTPi.zero_grad()
+        log_probs_c = torch.nn.LogSoftmax(dim=-1)(Pi(epoch_data['S'])).gather(1, epoch_data['A'].view(-1, 1)).view(-1)
+        penalty = epoch_data['ret_c'] * log_probs_c
+        objective3 = penalty.sum()
+        objective3.backward()
+        OPTPi.step()
+
 
 # Play episodes
 # Training function
@@ -109,6 +119,7 @@ def train(seed):
         # Collect experience
         all_S, all_A = [], []
         all_returns = []
+        all_returns_c = []
         for epj in range(EPISODES_PER_EPOCH):
             
             # Play an episode and log episodic reward
@@ -123,16 +134,29 @@ def train(seed):
             discounted_rewards = t.f(discounted_rewards)
             all_returns += [discounted_rewards]
                        
+            # Create cost returns
+            discounted_rewards_c = copy.deepcopy(Rc)
+            for i in range(len(Rc)-1)[::-1]:
+                discounted_rewards_c[i] += GAMMA * discounted_rewards_c[i+1]
+            discounted_rewards_c = t.f(discounted_rewards_c)
+            if discounted_rewards_c[0] <= penalty_param:
+                all_returns_c += [torch.zeros_like(discounted_rewards_c)]
+            else:
+                all_returns_c += [discounted_rewards_c]
+
         S, A = t.f(np.array(all_S)), t.l(np.array(all_A))
         returns = torch.cat(all_returns, dim=0).flatten()
+        returns_c = torch.cat(all_returns_c, dim=0).flatten()
 
         # add to replay buffer
         log_probs = torch.nn.LogSoftmax(dim=-1)(Pi(S)).gather(1, A.view(-1, 1)).view(-1)
         buf.add(S, A, returns, log_probs.detach())
 
+        epoch_data = {'S':S, 'A':A, 'ret_c':returns_c}
+
         # update networks
         for i in range(TRAIN_EPOCHS):
-            update_networks(epi, buf, Pi, V, OPTPi, OPTV)
+            update_networks(epi, epoch_data, buf, Pi, V, OPTPi, OPTV)
 
         # evaluate
         Rews = []
@@ -162,6 +186,7 @@ def plot_arrays(ax, vars, color, label):
     std = np.std(vars, axis=0)
     ax.plot(range(len(mean)), mean, color=color, label=label)
     ax.fill_between(range(len(mean)), np.maximum(mean-std, 0), np.minimum(mean+std,200), color=color, alpha=0.3)
+    ax.set_xlabel("Episode")
 
 if __name__ == "__main__":
 
@@ -172,13 +197,23 @@ if __name__ == "__main__":
     # Train for different seeds
     curves = []
     curvesc = []
-    for seed in SEEDS:
-        R, Rc = train(seed)
-        curves += [R]
-        curvesc += [Rc]
+    plt_colours = {0:"red", 1:"blue", 5:"green", 10:"purple"}
+    for beta in [0, 1, 5, 10]:
+        penalty_param = beta
+        for seed in SEEDS:
+            R, Rc = train(seed)
+            curves += [R]
+            curvesc += [Rc]
 
-    # Plot the curve for the given seeds
-    plot_arrays(ax[0], curves, 'b', 'ppo')
-    plot_arrays(ax[1], curvesc, 'b', 'ppo')
-    plt.legend(loc='best')
+        # Plot the curve for the given seeds
+        if beta == 0:
+            plt_label = "ppo"
+        else:
+            plt_label = f"beta = {beta}"
+        plot_arrays(ax[0], curves, plt_colours[beta], plt_label)
+        plot_arrays(ax[1], curvesc, plt_colours[beta], plt_label)
+        ax[0].set_ylabel("Reward")
+        ax[1].set_ylabel("Cost")
+        plt.legend(loc='best')
+
     plt.show()
