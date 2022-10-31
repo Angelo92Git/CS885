@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore")
 # cs.uwaterloo.ca/~ppoupart/teaching/cs885-winter22/slides/cs885-module5.pdf
 
 # Constants
-SEEDS = [1, 2, 3, 4, 5]
+SEEDS = [1]#, 2, 3, 4, 5]
 t = utils.torch.TorchHelper()
 DEVICE = t.device
 OBS_N = 4               # State space size
@@ -27,15 +27,16 @@ LEARNING_RATE = 5e-4    # Learning rate for Adam optimizer
 TRAIN_AFTER_EPISODES = 10   # Just collect episodes for these many episodes
 TRAIN_EPOCHS = 25       # Train for these many epochs every time
 BUFSIZE = 10000         # Replay buffer size
-EPISODES = 500          # Total number of episodes to learn over
+EPISODES = 200          # Total number of episodes to learn over
 TEST_EPISODES = 10      # Test episodes
 HIDDEN = 512            # Hidden nodes
 TARGET_NETWORK_UPDATE_FREQ = 10 # Target network update frequency
 
 # Suggested constants
 ATOMS = 51              # Number of atoms for distributional network
-ZRANGE = [0, 200]       # Range for Z projection
-Z_SUP = torch.from_numpy(np.arange(0, 200, 200/51))
+ZRANGE = [0, 100]       # Range for Z projection
+DELTA_Z = (ZRANGE[1] - ZRANGE[0])/(ATOMS-1.0) 
+Z_SUP = torch.range(ZRANGE[0], ZRANGE[1], DELTA_Z)
 
 # Global variables
 EPSILON = STARTING_EPSILON
@@ -77,8 +78,10 @@ def policy(env, obs):
         action = np.random.randint(ACT_N)
     else:
         ## TODO: use Z to compute greedy action
-        action = 0 if (torch.nn.Softmax()(Z(obs)[0][0:ATOMS])*Z_SUP).sum() > (torch.nn.Softmax()(Z(obs)[0][ATOMS:])*Z_SUP).sum() else 1
-        return action
+        with torch.no_grad():
+            probs = torch.softmax(Z(obs).view(2, -1), dim = 1)
+            expected_return = (probs*Z_SUP).sum(dim=1)
+            action = expected_return.argmax().item()
     
     # Epsilon update rule: Keep reducing a small amount over
     # STEPS_MAX number of steps, and at the end, fix to EPSILON_END
@@ -91,26 +94,30 @@ def update_networks(epi, buf, Z, Zt, OPT):
     
     loss = 0.
     ## TODO: Implement this function
-    S, A, R, S_dash, _ = buf.sample(MINIBATCH_SIZE, t)
+    S, A, R, S_prime, done = buf.sample(MINIBATCH_SIZE, t)
 
     for i in range(MINIBATCH_SIZE):
         p = torch.zeros(ATOMS)
         # a_greedy = policy(_, S_dash[i])
-        a_greedy = 0 if (torch.nn.Softmax()(Z(S_dash[i])[0:ATOMS])*Z_SUP).sum() > (torch.nn.Softmax()(Z(S_dash[i])[ATOMS:])*Z_SUP).sum() else 1
-        nodes_dash = [a_greedy*ATOMS, a_greedy*ATOMS + ATOMS]
-        nodes = [A[i]*ATOMS, A[i]*ATOMS + ATOMS]
-        ztp = torch.nn.Softmax()(Zt(S_dash[i])[nodes_dash[0]:nodes_dash[1]])
-        zp = torch.nn.Softmax()(Z(S[i])[nodes[0]:nodes[1]])
-        z_backproj = torch.clip(R[i] + GAMMA * Z_SUP, ZRANGE[0], ZRANGE[1])
-        delta_z = (ZRANGE[1] - ZRANGE[0])/ATOMS
-        index = (z_backproj - ZRANGE[0])/delta_z
-        l_index = torch.floor(index)
-        u_index = torch.ceil(index)
-        p[list(l_index)] += ztp * (u_index - index)
-        p[list(u_index)] += ztp * (index - l_index)
-        loss = -(p * torch.log(zp)).sum() # Add z predicitons, and softmaxes
+        with torch.no_grad():
+            probs_prime = torch.softmax(Zt(S_prime[i]).view(2, -1), dim=1)
+            expected_return_prime = (probs_prime*Z_SUP).sum(dim=1)
+            a_greedy = expected_return_prime.argmax()
+
+            if not done[i]:
+                bell_zi_prime = torch.clip(R[i] + GAMMA * Z_SUP, ZRANGE[0], ZRANGE[1])
+            else:
+                bell_zi_prime = torch.ones_like(Z_SUP)*R[i]
+                
+            index = (bell_zi_prime - ZRANGE[0])/DELTA_Z
+            l_index = t.l(torch.floor(index))
+            u_index = t.l(torch.ceil(index))
+            p[l_index] += probs_prime[a_greedy] * (u_index - index)
+            p[u_index] += probs_prime[a_greedy] * (index - l_index)
 
         OPT.zero_grad()
+        zp_out = torch.softmax(Z(S[i]).view(2, -1)[A[i]], 0)
+        loss = (p * torch.log(zp_out)).sum(-1)
         loss.backward()
         OPT.step()
 
