@@ -55,8 +55,9 @@ def create_everything(seed):
         torch.nn.Linear(HIDDEN, 1)
     ).to(DEVICE)
     OPTPi = torch.optim.Adam(Pi.parameters(), lr = 1e-4)
+    OPTPic = torch.optim.Adam(Pi.parameters(), lr = 1e-5)
     OPTV = torch.optim.Adam(V.parameters(), lr = 1e-3)
-    return env, test_env, buf, Pi, V, OPTPi, OPTV
+    return env, test_env, buf, Pi, V, OPTPi, OPTV, OPTPic
 
 # Policy
 def policy(env, obs):
@@ -65,7 +66,7 @@ def policy(env, obs):
     return np.random.choice(ACT_N, p = probs.cpu().detach().numpy())
 
 # Training function
-def update_networks(epi_lens, epoch_data, buf, Pi, V, OPTPi, OPTV):
+def update_networks(epoch_data, buf, Pi, V, OPTPi, OPTV, OPTPic):
     
     # Sample from buffer
     S, A, returns, old_log_probs = buf.sample(MINIBATCH_SIZE)
@@ -89,15 +90,20 @@ def update_networks(epi_lens, epoch_data, buf, Pi, V, OPTPi, OPTV):
 
     if penalty_param != 0:
         epoch_data = copy.deepcopy(epoch_data)
-        s_i = 0 # Start index of episode
-        for e_i in epi_lens: # End index of episode
-            OPTPi.zero_grad()
-            log_probs_c = torch.nn.LogSoftmax(dim=-1)(Pi(epoch_data['S'][s_i:e_i])).gather(1, epoch_data['A'][s_i:e_i].view(-1, 1)).view(-1)
-            penalty = epoch_data['Gc0'][s_i:e_i] * epoch_data['ret_c'][s_i:e_i] * log_probs_c
-            objective3 = penalty.sum()
-            objective3.backward()
-            OPTPi.step()
-            s_i = e_i
+
+        # Error checking
+        # assert len(epoch_data['S']) == EPISODES_PER_EPOCH, "states array data not for 20 episodes"
+        # assert len(epoch_data['A']) == EPISODES_PER_EPOCH, "actions array data not for 20 episodes"
+        # assert len(epoch_data['ret_c']) == EPISODES_PER_EPOCH, "costs return array data not for 20 episodes"
+        # assert len(epoch_data['I_Gc0']) == EPISODES_PER_EPOCH, "I_Gc0 array data not for 20 episodes"
+
+        for episode in range(EPISODES_PER_EPOCH):
+            if epoch_data['I_Gc0']:
+                OPTPic.zero_grad()
+                log_probs_c = torch.nn.LogSoftmax(dim=-1)(Pi(epoch_data['S'][episode])).gather(1, epoch_data['A'][episode].view(-1, 1)).view(-1)
+                objective3 = epoch_data['I_Gc0'][episode] * (epoch_data['ret_c'][episode] * log_probs_c).sum()
+                objective3.backward()
+                OPTPic.step()
 
 
 # Play episodes
@@ -108,7 +114,7 @@ def train(seed):
     print("Seed=%d" % seed)
 
     # Create environments, buffer, networks, optimizers
-    env, test_env, buf, Pi, V, OPTPi, OPTV = create_everything(seed)
+    env, test_env, buf, Pi, V, OPTPi, OPTV, OPTPic = create_everything(seed)
 
     # Train PPO for EPOCH times
     testRs = []
@@ -122,16 +128,18 @@ def train(seed):
         # Collect experience
         all_S, all_A = [], []
         all_returns = []
-        all_returns_c = []
-        Gc0_all = []
-        epi_lens = []
+        epoch_S = []
+        epoch_A = []
+        epoch_c = []
+        epoch_I_Gc0 = []
         for epj in range(EPISODES_PER_EPOCH):
             
             # Play an episode and log episodic reward
             S, A, R, Rc = utils.envs.play_episode(env, policy, constraint=True)
             all_S += S[:-1] # ignore last state
             all_A += A
-            epi_lens.append(len(all_A))
+            epoch_S += [t.f(np.array(S[:-1]))]
+            epoch_A += [t.l(np.array(A))]
             
             # Create returns 
             discounted_rewards = copy.deepcopy(R)
@@ -141,30 +149,28 @@ def train(seed):
             all_returns += [discounted_rewards]
                        
             # Create cost returns
-            discounted_rewards_c = copy.deepcopy(Rc)
+            discounted_costs = copy.deepcopy(Rc)
             for i in range(len(Rc)-1)[::-1]:
-                discounted_rewards_c[i] += GAMMA * discounted_rewards_c[i+1]
-            discounted_rewards_c = t.f(discounted_rewards_c)
-            all_returns_c += [discounted_rewards_c]
-            if discounted_rewards_c[0] <= penalty_param:
-                Gc0_all += [torch.zeros_like(discounted_rewards_c).to(discounted_rewards_c.dtype)]
+                discounted_costs[i] += GAMMA * discounted_costs[i+1]
+            discounted_costs = t.f(discounted_costs)
+            epoch_c += [discounted_costs]
+            if discounted_costs[0] > penalty_param:
+                epoch_I_Gc0 += [t.f(1.)]
             else:
-                Gc0_all += [torch.ones_like(discounted_rewards_c).to(discounted_rewards_c.dtype)]
+                epoch_I_Gc0 += [t.f(0.)]
 
         S, A = t.f(np.array(all_S)), t.l(np.array(all_A))
         returns = torch.cat(all_returns, dim=0).flatten()
-        returns_c = torch.cat(all_returns_c, dim=0).flatten()
-        Gc0 = torch.cat(Gc0_all, dim=0).flatten()
 
         # add to replay buffer
         log_probs = torch.nn.LogSoftmax(dim=-1)(Pi(S)).gather(1, A.view(-1, 1)).view(-1)
         buf.add(S, A, returns, log_probs.detach())
 
-        epoch_data = {'S':S, 'A':A, 'ret_c':returns_c, 'Gc0':Gc0}
+        epoch_data = {'S':epoch_S, 'A':epoch_A, 'ret_c':epoch_c, 'I_Gc0':epoch_I_Gc0}
 
         # update networks
         for i in range(TRAIN_EPOCHS):
-            update_networks(epi_lens, epoch_data, buf, Pi, V, OPTPi, OPTV)
+            update_networks(epoch_data, buf, Pi, V, OPTPi, OPTV, OPTPic)
 
         # evaluate
         Rews = []
@@ -182,7 +188,7 @@ def train(seed):
         pbar.set_description("R25(%g), Rc25(%g)" % (last25testRs[-1], last25testRcs[-1]))
 
     pbar.close()
-    print("Beta: ", beta, " Seed: ", seed, ", Training finished!")
+    print("Beta: ", penalty_param, " Seed: ", seed, ", Training finished!")
     env.close()
     
     return last25testRs, last25testRcs
@@ -203,23 +209,22 @@ if __name__ == "__main__":
     fig.set_figwidth(10)
 
     # Train for different seeds
-    plt_colours = {0:"red", 1:"blue", 5:"green", 10:"purple"}
-    for beta in [0, 1, 5, 10]:
+    plt_colours = {0:"red", 1:"blue", 5:"green", 10:"purple", 300:"black"}
+    for penalty_param in [0, 1, 5, 10]:
         curves = []
         curvesc = []
-        penalty_param = beta
         for seed in SEEDS:
             R, Rc = train(seed)
             curves += [R]
             curvesc += [Rc]
 
         # Plot the curve for the given seeds
-        if beta == 0:
+        if penalty_param == 0:
             plt_label = "ppo"
         else:
-            plt_label = f"beta = {beta}"
-        plot_arrays(ax[0], curves, plt_colours[beta], plt_label)
-        plot_arrays(ax[1], curvesc, plt_colours[beta], plt_label)
+            plt_label = f"beta = {penalty_param}"
+        plot_arrays(ax[0], curves, plt_colours[penalty_param], plt_label)
+        plot_arrays(ax[1], curvesc, plt_colours[penalty_param], plt_label)
         ax[0].set_ylabel("Reward")
         ax[1].set_ylabel("Cost")
         plt.legend(loc='best')
