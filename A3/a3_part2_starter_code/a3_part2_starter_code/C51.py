@@ -79,7 +79,7 @@ def policy(env, obs):
     else:
         ## TODO: use Z to compute greedy action
         with torch.no_grad():
-            probs = torch.softmax(Z(obs).view(2, -1), dim = 1)
+            probs = torch.softmax(Z(obs).view(ACT_N, ATOMS), dim = 1)
             expected_return = (probs*Z_SUP).sum(dim=1)
             action = expected_return.argmax().item()
     
@@ -100,7 +100,7 @@ def update_networks(epi, buf, Z, Zt, OPT):
         p = torch.zeros(ATOMS)
         # a_greedy = policy(_, S_dash[i])
         with torch.no_grad():
-            probs_prime = torch.softmax(Zt(S_prime[i]).view(2, -1), dim=1)
+            probs_prime = torch.softmax(Zt(S_prime[i]).view(ACT_N, ATOMS), dim=1)
             expected_return_prime = (probs_prime*Z_SUP).sum(dim=1)
             a_greedy = expected_return_prime.argmax()
 
@@ -116,7 +116,7 @@ def update_networks(epi, buf, Z, Zt, OPT):
             p[u_index] += probs_prime[a_greedy] * (index - l_index)
 
         OPT.zero_grad()
-        zp_out = torch.softmax(Z(S[i]).view(2, -1)[A[i]], 0)
+        zp_out = torch.softmax(Z(S[i]).view(ACT_N, ATOMS)[A[i]], 0)
         loss = -(p * torch.log(zp_out)).sum(-1)
         loss.backward()
         OPT.step()
