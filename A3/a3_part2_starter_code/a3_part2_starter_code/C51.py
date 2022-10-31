@@ -35,6 +35,7 @@ TARGET_NETWORK_UPDATE_FREQ = 10 # Target network update frequency
 # Suggested constants
 ATOMS = 51              # Number of atoms for distributional network
 ZRANGE = [0, 200]       # Range for Z projection
+Z_SUP = torch.from_numpy(np.arange(0, 200, 200/51))
 
 # Global variables
 EPSILON = STARTING_EPSILON
@@ -76,7 +77,8 @@ def policy(env, obs):
         action = np.random.randint(ACT_N)
     else:
         ## TODO: use Z to compute greedy action
-        pass
+        action = 0 if (torch.nn.Softmax()(Z(obs)[0][0:ATOMS])*Z_SUP).sum() > (torch.nn.Softmax()(Z(obs)[0][ATOMS:])*Z_SUP).sum() else 1
+        return action
     
     # Epsilon update rule: Keep reducing a small amount over
     # STEPS_MAX number of steps, and at the end, fix to EPSILON_END
@@ -89,6 +91,28 @@ def update_networks(epi, buf, Z, Zt, OPT):
     
     loss = 0.
     ## TODO: Implement this function
+    S, A, R, S_dash, _ = buf.sample(MINIBATCH_SIZE, t)
+
+    for i in range(MINIBATCH_SIZE):
+        p = torch.zeros(ATOMS)
+        # a_greedy = policy(_, S_dash[i])
+        a_greedy = 0 if (torch.nn.Softmax()(Z(S_dash[i])[0:ATOMS])*Z_SUP).sum() > (torch.nn.Softmax()(Z(S_dash[i])[ATOMS:])*Z_SUP).sum() else 1
+        nodes_dash = [a_greedy*ATOMS, a_greedy*ATOMS + ATOMS]
+        nodes = [A[i]*ATOMS, A[i]*ATOMS + ATOMS]
+        ztp = torch.nn.Softmax()(Zt(S_dash[i])[nodes_dash[0]:nodes_dash[1]])
+        zp = torch.nn.Softmax()(Z(S[i])[nodes[0]:nodes[1]])
+        z_backproj = torch.clip(R[i] + GAMMA * Z_SUP, ZRANGE[0], ZRANGE[1])
+        delta_z = (ZRANGE[1] - ZRANGE[0])/ATOMS
+        index = (z_backproj - ZRANGE[0])/delta_z
+        l_index = torch.floor(index)
+        u_index = torch.ceil(index)
+        p[list(l_index)] += ztp * (u_index - index)
+        p[list(u_index)] += ztp * (index - l_index)
+        loss = -(p * torch.log(zp)).sum() # Add z predicitons, and softmaxes
+
+        OPT.zero_grad()
+        loss.backward()
+        OPT.step()
 
     # Update target network
     if epi%TARGET_NETWORK_UPDATE_FREQ==0:
@@ -117,7 +141,7 @@ def train(seed):
     for epi in pbar:
 
         # Play an episode and log episodic reward
-        S, A, R = utils.envs.play_episode_rb(env, policy, buf)
+        S, A, R = utils.envs.play_episode_rb(env, policy, buf)  # This updates the buffer with experiences
         
         # Train after collecting sufficient experience
         if epi >= TRAIN_AFTER_EPISODES:
