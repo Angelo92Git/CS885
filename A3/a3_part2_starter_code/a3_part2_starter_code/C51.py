@@ -117,7 +117,7 @@ def update_networks(epi, buf, Z, Zt, OPT):
 
         OPT.zero_grad()
         zp_out = torch.softmax(Z(S[i]).view(2, -1)[A[i]], 0)
-        loss = (p * torch.log(zp_out)).sum(-1)
+        loss = -(p * torch.log(zp_out)).sum(-1)
         loss.backward()
         OPT.step()
 
