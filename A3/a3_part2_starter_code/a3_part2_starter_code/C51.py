@@ -36,7 +36,7 @@ TARGET_NETWORK_UPDATE_FREQ = 10 # Target network update frequency
 ATOMS = 51              # Number of atoms for distributional network
 ZRANGE = [0, 100]       # Range for Z projection
 DELTA_Z = (ZRANGE[1] - ZRANGE[0])/(ATOMS-1.0) 
-Z_SUP = torch.range(ZRANGE[0], ZRANGE[1], DELTA_Z)
+Z_SUP = torch.range(ZRANGE[0], ZRANGE[1], DELTA_Z).detach()
 
 # Global variables
 EPSILON = STARTING_EPSILON
@@ -79,7 +79,7 @@ def policy(env, obs):
     else:
         ## TODO: use Z to compute greedy action
         with torch.no_grad():
-            probs = torch.softmax(Z(obs).view(ACT_N, ATOMS), dim = 1)
+            probs = torch.nn.Softmax(dim=1)(Z(obs).view(ACT_N, ATOMS))
             expected_return = (probs*Z_SUP).sum(dim=1)
             action = expected_return.argmax().item()
     
@@ -95,31 +95,31 @@ def update_networks(epi, buf, Z, Zt, OPT):
     ## TODO: Implement this function
     S, A, R, S_prime, done = buf.sample(MINIBATCH_SIZE, t)
 
-    for i in range(MINIBATCH_SIZE):
-        p = torch.zeros(ATOMS)
-        # a_greedy = policy(_, S_dash[i])
-        with torch.no_grad():
-            probs_prime = torch.softmax(Zt(S_prime[i]).view(ACT_N, ATOMS), dim=1)
-            expected_return_prime = (probs_prime * Z_SUP.view(-1, ATOMS)).sum(dim=1)
-            a_greedy = expected_return_prime.argmax().item()
-            
-            if not done[i]:
-                bell_zi_prime = torch.clip(R[i].unsqueeze(0).expand(ATOMS) + GAMMA * Z_SUP, ZRANGE[0], ZRANGE[1])
-            else:
-                bell_zi_prime = torch.clip(R[i].unsqueeze(0).expand(ATOMS), ZRANGE[0], ZRANGE[1])
- 
-            index = (bell_zi_prime - ZRANGE[0])/DELTA_Z
-            l_index = torch.clip(t.l(torch.floor(index)), 0, ATOMS-1)
-            u_index = torch.clip(t.l(torch.ceil(index)), 0, ATOMS-1)
-            for j in range(ATOMS):
-                p[l_index[j]] += probs_prime[a_greedy][j] * (u_index[j] - index[j])
-                p[u_index[j]] += probs_prime[a_greedy][j] * (index[j] - l_index[j])
+    p = torch.zeros((MINIBATCH_SIZE, ATOMS))
+    with torch.no_grad():
+        probs_prime = torch.nn.Softmax(dim=2)(Zt(S_prime).view(MINIBATCH_SIZE, ACT_N, ATOMS))
+        expected_return_prime = (probs_prime*Z_SUP).sum(dim=2)
+        a_greedy = expected_return_prime.argmax(dim=1)
+        a_greedy = a_greedy.unsqueeze(1).unsqueeze(2).expand(MINIBATCH_SIZE, 1, ATOMS)
 
-        OPT.zero_grad()
-        zp_out = torch.softmax(Z(S[i]).view(ACT_N, ATOMS)[A[i]], 0)
-        loss = -(p * torch.log(zp_out)).sum(-1)
-        loss.backward()
-        OPT.step()
+        Tau_z = torch.clip(R.view(MINIBATCH_SIZE, 1) + GAMMA * Z_SUP, ZRANGE[0], ZRANGE[1])
+        Tau_z = torch.where(done.unsqueeze(1).expand(MINIBATCH_SIZE, ATOMS) == 1, R.unsqueeze(1).expand(MINIBATCH_SIZE, ATOMS), Tau_z)
+
+        index = (Tau_z - ZRANGE[0])/DELTA_Z
+        l_index = torch.clip(t.l(torch.floor(index)), 0, ATOMS - 1)
+        u_index = torch.clip(t.l(torch.ceil(index)), 0, ATOMS - 1)
+
+        probs_greedy = torch.gather(input=probs_prime, index=a_greedy, dim=1)  
+        p.scatter_add_(dim=1, index = l_index, src = probs_greedy.squeeze()*(u_index - index)) # For repeated indices, torch.scatter_add accumulates the sum, rather than simply overwriting at the index non-deterministically
+        p.scatter_add_(dim=1, index = u_index, src = probs_greedy.squeeze()*(index - l_index)) # For repeated indices, torch.scatter_add accumulates the sum, rather than simply overwriting at the index non-deterministically
+
+    OPT.zero_grad()
+    zp_out = torch.nn.Softmax(dim=2)(Z(S).view(MINIBATCH_SIZE, ACT_N, ATOMS))
+    a_experience = A.unsqueeze(1).unsqueeze(2).expand(MINIBATCH_SIZE, 1, ATOMS)
+    zp_a = torch.gather(input=zp_out, index=a_experience, dim=1)
+    loss = -(p * torch.log(zp_a.squeeze())).sum(-1).mean()
+    loss.backward()
+    OPT.step()
 
     # Update target network
     if epi%TARGET_NETWORK_UPDATE_FREQ==0:
