@@ -100,10 +100,10 @@ def update_networks(epi, buf, Z, Zt, OPT):
         probs_prime = torch.nn.Softmax(dim=2)(Zt(S_prime).view(MINIBATCH_SIZE, ACT_N, ATOMS))
         expected_return_prime = (probs_prime*Z_SUP).sum(dim=2)
         a_greedy = expected_return_prime.argmax(dim=1)
-        a_greedy = a_greedy.unsqueeze(1).unsqueeze(2).expand(MINIBATCH_SIZE, 1, ATOMS)
+        a_greedy = a_greedy.unsqueeze(1).unsqueeze(2).repeat(1, 1, ATOMS)
 
         Tau_z = torch.clip(R.view(MINIBATCH_SIZE, 1) + GAMMA * Z_SUP, ZRANGE[0], ZRANGE[1])
-        Tau_z = torch.where(done.unsqueeze(1).expand(MINIBATCH_SIZE, ATOMS) == 1, R.unsqueeze(1).expand(MINIBATCH_SIZE, ATOMS), Tau_z)
+        Tau_z = torch.where(done.unsqueeze(1).repeat(1, ATOMS) == 1, R.unsqueeze(1).repeat(1, ATOMS), Tau_z)
 
         index = (Tau_z - ZRANGE[0])/DELTA_Z
         l_index = torch.clip(t.l(torch.floor(index)), 0, ATOMS - 1)
@@ -115,7 +115,7 @@ def update_networks(epi, buf, Z, Zt, OPT):
 
     OPT.zero_grad()
     zp_out = torch.nn.Softmax(dim=2)(Z(S).view(MINIBATCH_SIZE, ACT_N, ATOMS))
-    a_experience = A.unsqueeze(1).unsqueeze(2).expand(MINIBATCH_SIZE, 1, ATOMS)
+    a_experience = A.unsqueeze(1).unsqueeze(2).repeat(1, 1, ATOMS)
     zp_a = torch.gather(input=zp_out, index=a_experience, dim=1)
     loss = -(p * torch.log(zp_a.squeeze())).sum(-1).mean()
     loss.backward()
