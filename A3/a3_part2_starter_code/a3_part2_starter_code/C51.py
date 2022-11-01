@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore")
 # cs.uwaterloo.ca/~ppoupart/teaching/cs885-winter22/slides/cs885-module5.pdf
 
 # Constants
-SEEDS = [1]#, 2, 3, 4, 5]
+SEEDS = [1, 2, 3, 4, 5]
 t = utils.torch.TorchHelper()
 DEVICE = t.device
 OBS_N = 4               # State space size
@@ -27,7 +27,7 @@ LEARNING_RATE = 5e-4    # Learning rate for Adam optimizer
 TRAIN_AFTER_EPISODES = 10   # Just collect episodes for these many episodes
 TRAIN_EPOCHS = 25       # Train for these many epochs every time
 BUFSIZE = 10000         # Replay buffer size
-EPISODES = 200          # Total number of episodes to learn over
+EPISODES = 500          # Total number of episodes to learn over
 TEST_EPISODES = 10      # Test episodes
 HIDDEN = 512            # Hidden nodes
 TARGET_NETWORK_UPDATE_FREQ = 10 # Target network update frequency
@@ -92,7 +92,6 @@ def policy(env, obs):
 # Update networks
 def update_networks(epi, buf, Z, Zt, OPT):
     
-    loss = 0.
     ## TODO: Implement this function
     S, A, R, S_prime, done = buf.sample(MINIBATCH_SIZE, t)
 
@@ -101,19 +100,20 @@ def update_networks(epi, buf, Z, Zt, OPT):
         # a_greedy = policy(_, S_dash[i])
         with torch.no_grad():
             probs_prime = torch.softmax(Zt(S_prime[i]).view(ACT_N, ATOMS), dim=1)
-            expected_return_prime = (probs_prime*Z_SUP).sum(dim=1)
-            a_greedy = expected_return_prime.argmax()
-
+            expected_return_prime = (probs_prime * Z_SUP.view(-1, ATOMS)).sum(dim=1)
+            a_greedy = expected_return_prime.argmax().item()
+            
             if not done[i]:
-                bell_zi_prime = torch.clip(R[i] + GAMMA * Z_SUP, ZRANGE[0], ZRANGE[1])
+                bell_zi_prime = torch.clip(R[i].unsqueeze(0).expand(ATOMS) + GAMMA * Z_SUP, ZRANGE[0], ZRANGE[1])
             else:
-                bell_zi_prime = torch.ones_like(Z_SUP)*R[i]
-                
+                bell_zi_prime = torch.clip(R[i].unsqueeze(0).expand(ATOMS), ZRANGE[0], ZRANGE[1])
+ 
             index = (bell_zi_prime - ZRANGE[0])/DELTA_Z
-            l_index = t.l(torch.floor(index))
-            u_index = t.l(torch.ceil(index))
-            p[l_index] += probs_prime[a_greedy] * (u_index - index)
-            p[u_index] += probs_prime[a_greedy] * (index - l_index)
+            l_index = torch.clip(t.l(torch.floor(index)), 0, ATOMS-1)
+            u_index = torch.clip(t.l(torch.ceil(index)), 0, ATOMS-1)
+            for j in range(ATOMS):
+                p[l_index[j]] += probs_prime[a_greedy][j] * (u_index[j] - index[j])
+                p[u_index[j]] += probs_prime[a_greedy][j] * (index[j] - l_index[j])
 
         OPT.zero_grad()
         zp_out = torch.softmax(Z(S[i]).view(ACT_N, ATOMS)[A[i]], 0)
