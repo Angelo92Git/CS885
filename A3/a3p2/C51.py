@@ -112,10 +112,11 @@ def update_networks(epi, buf, Z, Zt, OPT):
         probs_greedy = torch.gather(input=probs_prime, index=a_greedy, dim=1)  
         p.scatter_add_(dim=1, index = l_index, src = probs_greedy.squeeze()*(u_index - index)) # For repeated indices, torch.scatter_add accumulates the sum, rather than simply overwriting at the index non-deterministically
         p.scatter_add_(dim=1, index = u_index, src = probs_greedy.squeeze()*(index - l_index)) # For repeated indices, torch.scatter_add accumulates the sum, rather than simply overwriting at the index non-deterministically
+        
+        a_experience = A.unsqueeze(1).unsqueeze(2).repeat(1, 1, ATOMS)
 
     OPT.zero_grad()
     zp_out = torch.nn.Softmax(dim=2)(Z(S).view(MINIBATCH_SIZE, ACT_N, ATOMS))
-    a_experience = A.unsqueeze(1).unsqueeze(2).repeat(1, 1, ATOMS)
     zp_a = torch.gather(input=zp_out, index=a_experience, dim=1)
     loss = -(p * torch.log(zp_a.squeeze())).sum(-1).mean()
     loss.backward()
