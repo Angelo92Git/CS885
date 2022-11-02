@@ -101,7 +101,7 @@ def update_networks(epoch_data, buf, Pi, V, OPTPi, OPTV, OPTPic):
             if epoch_data['I_Gc0']:
                 OPTPic.zero_grad()
                 log_probs_c = torch.nn.LogSoftmax(dim=-1)(Pi(epoch_data['S'][episode])).gather(1, epoch_data['A'][episode].view(-1, 1)).view(-1)
-                objective3 = epoch_data['I_Gc0'][episode] * (epoch_data['ret_c'][episode] * log_probs_c).sum()
+                objective3 = epoch_data['I_Gc0'][episode].detach() * (epoch_data['ret_c'][episode].detach() * log_probs_c).sum()
                 objective3.backward()
                 OPTPic.step()
 
