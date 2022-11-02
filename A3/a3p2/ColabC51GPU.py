@@ -4,6 +4,7 @@ drive.mount('/CS885')
 import sys
 sys.path.append('/CS885/MyDrive/Colab Notebooks/CS885/A3/')
 
+
 from turtle import update
 import gym
 import numpy as np
@@ -14,7 +15,6 @@ import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings("ignore")
 
-cuda = torch.device('cuda')
 # C51
 # Based on Slide 11
 # cs.uwaterloo.ca/~ppoupart/teaching/cs885-winter22/slides/cs885-module5.pdf
@@ -43,7 +43,7 @@ TARGET_NETWORK_UPDATE_FREQ = 10 # Target network update frequency
 ATOMS = 51              # Number of atoms for distributional network
 ZRANGE = [0, 100]       # Range for Z projection
 DELTA_Z = (ZRANGE[1] - ZRANGE[0])/(ATOMS-1.0) 
-Z_SUP = torch.range(ZRANGE[0], ZRANGE[1], DELTA_Z).cuda().detach()
+Z_SUP = torch.range(ZRANGE[0], ZRANGE[1], DELTA_Z).to(DEVICE).detach()
 
 # Global variables
 EPSILON = STARTING_EPSILON
@@ -86,7 +86,7 @@ def policy(env, obs):
     else:
         ## TODO: use Z to compute greedy action
         with torch.no_grad():
-            probs = torch.nn.Softmax(dim=1)(Z(obs).view(ACT_N, ATOMS)).cuda()
+            probs = torch.nn.Softmax(dim=1)(Z(obs).view(ACT_N, ATOMS)).to(DEVICE)
             expected_return = (probs*Z_SUP).sum(dim=1)
             action = expected_return.argmax().item()
     
@@ -102,30 +102,30 @@ def update_networks(epi, buf, Z, Zt, OPT):
     ## TODO: Implement this function
     S, A, R, S_prime, done = buf.sample(MINIBATCH_SIZE, t)
 
-    p = torch.zeros((MINIBATCH_SIZE, ATOMS)).cuda()
+    p = torch.zeros((MINIBATCH_SIZE, ATOMS)).detach().to(DEVICE)
     with torch.no_grad():
-        probs_prime = torch.nn.Softmax(dim=2)(Zt(S_prime).view(MINIBATCH_SIZE, ACT_N, ATOMS)).cuda()
+        probs_prime = torch.nn.Softmax(dim=2)(Zt(S_prime).view(MINIBATCH_SIZE, ACT_N, ATOMS)).to(DEVICE)
         expected_return_prime = (probs_prime*Z_SUP).sum(dim=2)
         a_greedy = expected_return_prime.argmax(dim=1)
         a_greedy = a_greedy.unsqueeze(1).unsqueeze(2).repeat(1, 1, ATOMS)
 
-        Tau_z = torch.clip(R.view(MINIBATCH_SIZE, 1) + GAMMA * Z_SUP, ZRANGE[0], ZRANGE[1]).cuda()
-        Tau_z = torch.where(done.unsqueeze(1).repeat(1, ATOMS) == 1, R.unsqueeze(1).repeat(1, ATOMS), Tau_z).cuda()
+        Tau_z = torch.clip(R.view(MINIBATCH_SIZE, 1) + GAMMA * Z_SUP, ZRANGE[0], ZRANGE[1]).to(DEVICE)
+        Tau_z = torch.where(done.unsqueeze(1).repeat(1, ATOMS) == 1, R.unsqueeze(1).repeat(1, ATOMS), Tau_z).to(DEVICE)
 
-        index = (Tau_z - ZRANGE[0])/DELTA_Z
-        l_index = torch.clip(t.l(torch.floor(index)), 0, ATOMS - 1).cuda()
-        u_index = torch.clip(t.l(torch.ceil(index)), 0, ATOMS - 1).cuda()
+        index = ((Tau_z - ZRANGE[0])/DELTA_Z).to(DEVICE)
+        l_index = torch.clip(t.l(torch.floor(index)), 0, ATOMS - 1).to(DEVICE)
+        u_index = torch.clip(t.l(torch.ceil(index)), 0, ATOMS - 1).to(DEVICE)
 
-        probs_greedy = torch.gather(input=probs_prime, index=a_greedy, dim=1).cuda()  
-        p.scatter_add_(dim=1, index = l_index, src = probs_greedy.squeeze()*(u_index - index)).cuda() # For repeated indices, torch.scatter_add accumulates the sum, rather than simply overwriting at the index non-deterministically
-        p.scatter_add_(dim=1, index = u_index, src = probs_greedy.squeeze()*(index - l_index)).cuda() # For repeated indices, torch.scatter_add accumulates the sum, rather than simply overwriting at the index non-deterministically
+        probs_greedy = torch.gather(input=probs_prime, index=a_greedy, dim=1).to(DEVICE)  
+        p.scatter_add_(dim=1, index = l_index, src = probs_greedy.squeeze()*(u_index - index)) # For repeated indices, torch.scatter_add accumulates the sum, rather than simply overwriting at the index non-deterministically
+        p.scatter_add_(dim=1, index = u_index, src = probs_greedy.squeeze()*(index - l_index)) # For repeated indices, torch.scatter_add accumulates the sum, rather than simply overwriting at the index non-deterministically
 
-        a_experience = A.unsqueeze(1).unsqueeze(2).repeat(1, 1, ATOMS).cuda()
+        a_experience = A.unsqueeze(1).unsqueeze(2).repeat(1, 1, ATOMS).to(DEVICE)
         
     OPT.zero_grad()
-    zp_out = torch.nn.Softmax(dim=2)(Z(S).view(MINIBATCH_SIZE, ACT_N, ATOMS)).cuda()
-    zp_a = torch.gather(input=zp_out, index=a_experience, dim=1).cuda()
-    loss = -(p * torch.log(zp_a.squeeze())).sum(-1).mean().cuda()
+    zp_out = torch.nn.Softmax(dim=2)(Z(S.detach()).view(MINIBATCH_SIZE, ACT_N, ATOMS))
+    zp_a = torch.gather(input=zp_out, index=a_experience, dim=1).to(DEVICE)
+    loss = -(p * torch.log(zp_a.squeeze())).sum(-1).mean()
     loss.backward()
     OPT.step()
 
